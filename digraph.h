@@ -12,11 +12,17 @@ private:
 	std::vector<Node> nodesList;
 
 	bool isPermutationIsomorphism(const Digraph &other, const std::vector<uint> &perm) const;
+    BitVector matrixToVector(const BitMatrix &m) const;
+    bool validateMapMatrix(const BitMatrix &m) const;
+    bool isMapMatrixIsomorphic(const BitMatrix &m) const;
+    bool setDisjunction(const BitVector &s);
     void
     recurse(const Digraph &pattern, bool isDisjunctive, Subgraph &combination, std::vector<Subgraph> &result, int offset,
             int k);
     void degreesCheck(const Digraph &pattern, BitMatrix &m);
     void prune(const Digraph &pattern, BitMatrix &m);
+    void recursiveSearch(int currentRow, BitVector &usedColumns, const Digraph &pattern,
+                         BitMatrix m, bool isDisjunctive, std::vector<BitVector> &result);
     bool checkNeighboursMapping(const Digraph &pattern, int x, int y, BitMatrix &m);
 public:
 	explicit Digraph(uint nVertices) {
@@ -34,5 +40,11 @@ public:
 	bool isSubgraphIsomorphic(const Digraph &other, Subgraph &pattern) const;
     std::vector<Subgraph> searchPattern(const Digraph &pattern, bool isDisjuntive);
     std::vector<Subgraph> searchPatternUllman(const Digraph &pattern, bool isDisjunctive);
+
+    Subgraph bitVectorToSubraph(const BitVector &v);
+
+	bool isMapMatrixIsomorphic(const Digraph &other, const BitMatrix &m) const;
+
+    void show() const;
 };
 
