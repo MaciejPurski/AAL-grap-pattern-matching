@@ -5,27 +5,33 @@
 void Digraph::addEdge(uint src, uint dst)
 {
 	nodesList[src].addOutEdge(dst);
-    nodesList[dst].addInEdge(src);
+	nodesList[dst].addInEdge(src);
 }
 
-bool Digraph::isPermutationIsomorphism(const Digraph &other, const std::vector<uint> &perm) const
+bool Digraph::isPermutationIsomorphism(const Digraph &pattern, const std::vector<uint> &perm) const
 {
-	for (uint i = 0; i < perm.size(); i++) {
+	/* iterate over all pattern's nodes */
+	for (uint i = 0; i < pattern.nodesList.size(); i++) {
         /* left and right bijection operands, which are to be compared */
-        const Node &left = other.nodesList[i];
-        const Node &right = this->nodesList[perm[i]];
+        const Node &left = pattern.nodesList[i];
+        const Node &right = nodesList[perm[i]];
 
-        for (int i = 0; i < perm.size(); i++) {
-            if (!left.testInEdge(i))
-                continue;
+	/* iterate over all in edges */
+        for (int j = 0; j < perm.size(); j++) {
+            	/* if an edge, does not exist don't do anything */
+		if (!left.testInEdge(j))
+                	continue;
 
-            uint permutedEdge = perm[i];
+		/* permute the i-th edge according to the given permutation */
+            uint permutedEdge = perm[j];
 
+		/* check if the permuted edge is present in the second graph's node */
             if (!right.testInEdge(permutedEdge))
                 return false;
         }
 
-        for (int i = 0; i < perm.size(); i++) {
+	/* iterate over all out edges */
+        for (int j = 0; j < perm.size(); i++) {
             if (!left.testOutEdge(i))
                 continue;
 
@@ -36,7 +42,7 @@ bool Digraph::isPermutationIsomorphism(const Digraph &other, const std::vector<u
         }
     }
 
-    // disjunction check
+    /* check if all nodes in the isomorphism are not used */
     for (uint i : perm) {
         if (nodesList[i].isUsed)
             return false;
@@ -48,27 +54,27 @@ bool Digraph::isPermutationIsomorphism(const Digraph &other, const std::vector<u
 bool Digraph::isSubgraphIsomorphic(const Digraph &other, Subgraph &pattern) const
 {
 	do {
-        if (isPermutationIsomorphism(other, pattern)) {
+        if (isPermutationIsomorphism(other, pattern))
             return true;
-        }
 	} while (std::next_permutation(pattern.begin(), pattern.end()));
 	
 	return false;
 }
 
+/* Recursive call used by the trivial algorithm */
 void Digraph::recurse(const Digraph &pattern, bool isDisjunctive, Subgraph &combination, std::vector<Subgraph> &result,
              int offset, int k)
 {
-    // if the combination's size already reached pattern's size
+    /* if the combination's size already reached pattern's size */
     if (k == 0) {
 
         if (isSubgraphIsomorphic(pattern, combination)) {
             result.emplace_back(combination);
 
+		/* if disjunction mode is on, set nodes as used */
             if (isDisjunctive) {
-                for (uint i : combination) {
+                for (uint i : combination)
                     this->nodesList[i].isUsed = true;
-                }
             }
         }
 
@@ -76,7 +82,7 @@ void Digraph::recurse(const Digraph &pattern, bool isDisjunctive, Subgraph &comb
     }
 
     for (int i = offset; i <= nodesList.size() - k; ++i) {
-        // omit the node if it was already matched
+        /* omit the node if it was already matched */
         if (nodesList[i].isUsed)
             continue;
         combination.push_back(i);
@@ -84,7 +90,9 @@ void Digraph::recurse(const Digraph &pattern, bool isDisjunctive, Subgraph &comb
         combination.pop_back();
     }
 }
-
+/*
+ * Public function used to find pattern using a trivial, exact algorithm
+ */
 std::vector<Subgraph> Digraph::searchPattern(const Digraph &pattern, bool isDisjuntive)
 {
     std::vector<Subgraph> result;
@@ -95,7 +103,10 @@ std::vector<Subgraph> Digraph::searchPattern(const Digraph &pattern, bool isDisj
     return result;
 }
 
-
+/* Function used as a first step in the Ullman's algorithm. 
+   It updates the mapping matrix, in order to filter out nodes,
+   which don't feed.
+ */
 void Digraph::degreesCheck(const Digraph &pattern, BitMatrix &m)
 {
     for (int i = 0; i < pattern.nodesList.size(); i++) {
