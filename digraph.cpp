@@ -2,105 +2,21 @@
 #include <iostream>
 #include "digraph.h"
 
-void Digraph::addEdge(uint src, uint dst)
+void Digraph::addEdge(int src, int dst)
 {
-	nodesList[src].addOutEdge(dst);
-	nodesList[dst].addInEdge(src);
+	adjacencyMatrix[src].set(dst);
+    nInEdges[dst]++;
+    nOutEdges[src]++;
 }
 
-bool Digraph::isPermutationIsomorphism(const Digraph &pattern, const std::vector<uint> &perm) const
+bool Digraph::isPermutationIsomorphism(const Digraph &pattern, const BitMatrix &bijection) const
 {
-	/* iterate over all pattern's nodes */
-	for (uint i = 0; i < pattern.nodesList.size(); i++) {
-        /* left and right bijection operands, which are to be compared */
-        const Node &left = pattern.nodesList[i];
-        const Node &right = nodesList[perm[i]];
+    BitMatrix transposed = bijection.transpose();
+    BitMatrix temp = bijection * adjacencyMatrix;
 
-	/* iterate over all in edges */
-        for (int j = 0; j < perm.size(); j++) {
-            	/* if an edge, does not exist don't do anything */
-		if (!left.testInEdge(j))
-                	continue;
+    temp = temp * transposed;
 
-		/* permute the i-th edge according to the given permutation */
-            uint permutedEdge = perm[j];
-
-		/* check if the permuted edge is present in the second graph's node */
-            if (!right.testInEdge(permutedEdge))
-                return false;
-        }
-
-	/* iterate over all out edges */
-        for (int j = 0; j < perm.size(); i++) {
-            if (!left.testOutEdge(i))
-                continue;
-
-            uint permutedEdge = perm[i];
-
-            if (!right.testOutEdge(permutedEdge))
-                return false;
-        }
-    }
-
-    /* check if all nodes in the isomorphism are not used */
-    for (uint i : perm) {
-        if (nodesList[i].isUsed)
-            return false;
-    }
-
-	return true;
-}
-
-bool Digraph::isSubgraphIsomorphic(const Digraph &other, Subgraph &pattern) const
-{
-	do {
-        if (isPermutationIsomorphism(other, pattern))
-            return true;
-	} while (std::next_permutation(pattern.begin(), pattern.end()));
-	
-	return false;
-}
-
-/* Recursive call used by the trivial algorithm */
-void Digraph::recurse(const Digraph &pattern, bool isDisjunctive, Subgraph &combination, std::vector<Subgraph> &result,
-             int offset, int k)
-{
-    /* if the combination's size already reached pattern's size */
-    if (k == 0) {
-
-        if (isSubgraphIsomorphic(pattern, combination)) {
-            result.emplace_back(combination);
-
-		/* if disjunction mode is on, set nodes as used */
-            if (isDisjunctive) {
-                for (uint i : combination)
-                    this->nodesList[i].isUsed = true;
-            }
-        }
-
-        return;
-    }
-
-    for (int i = offset; i <= nodesList.size() - k; ++i) {
-        /* omit the node if it was already matched */
-        if (nodesList[i].isUsed)
-            continue;
-        combination.push_back(i);
-        recurse(pattern, isDisjunctive, combination, result, i+1, k-1);
-        combination.pop_back();
-    }
-}
-/*
- * Public function used to find pattern using a trivial, exact algorithm
- */
-std::vector<Subgraph> Digraph::searchPattern(const Digraph &pattern, bool isDisjuntive)
-{
-    std::vector<Subgraph> result;
-    Subgraph combination;
-
-    recurse(pattern, isDisjuntive, combination, result, 0, pattern.nodesList.size());
-
-    return result;
+	return (pattern.adjacencyMatrix == temp);
 }
 
 /* Function used as a first step in the Ullman's algorithm. 
@@ -109,44 +25,31 @@ std::vector<Subgraph> Digraph::searchPattern(const Digraph &pattern, bool isDisj
  */
 void Digraph::degreesCheck(const Digraph &pattern, BitMatrix &m)
 {
-    for (int i = 0; i < pattern.nodesList.size(); i++) {
-        for (int j = 0; j < nodesList.size(); j++) {
-            if (pattern.nodesList[i].getNInEdges() <= nodesList[j].getNInEdges() &&
-                pattern.nodesList[i].getNOutEdges() <= nodesList[j].getNOutEdges())
+
+    for (int i = 0; i < pattern.adjacencyMatrix.size(); i++) {
+        for (int j = 0; j < adjacencyMatrix.size(); j++) {
+            // check out edges
+            if (nInEdges[j] >= pattern.nInEdges[i] && nOutEdges[j] >= pattern.nOutEdges[i])
                 m[i].set(j);
+
         }
     }
 }
 
-void Digraph::show() const
-{
-        for (int i = 0; i < nodesList.size(); i++) {
-            std::cout << i << ": " << "IN: " << nodesList[i].inEdges.get() << " OUT: " << nodesList[i].outEdges.get() << std::endl;
-        }
-}
-
+/* Function checks if all of the x's neigbours can be mapped to any of the y's neigbours */
 bool Digraph::checkNeighboursMapping(const Digraph &pattern, int x, int y, BitMatrix &m)
 {
-    const BitVector &neighboursInY = nodesList[y].inEdges;
-    const BitVector &neighboursOutY = nodesList[y].outEdges;
+    const BitVector &neighboursY = adjacencyMatrix[y];
     // for all neighbours of x;
-    for (int i = 0; i < pattern.nodesList.size(); i++) {
-        if (!pattern.nodesList[x].testInEdge(i))
+    for (int i = 0; i < pattern.adjacencyMatrix.size(); i++) {
+        // there's no edge
+        if (!pattern.adjacencyMatrix[x].test(i))
             continue;
 
-        if (!m[i].bitAND(neighboursInY))
+        if (!m[i].bitAND(neighboursY))
             return false;
     }
 
-    for (int i = 0; i < pattern.nodesList.size(); i++) {
-        if (!pattern.nodesList[x].testOutEdge(i))
-            continue;
-
-        if (!m[i].bitAND(neighboursOutY))
-            return false;
-    }
-
-    // for each x neighbour
     return true;
 }
 
@@ -156,8 +59,9 @@ void Digraph::prune(const Digraph &pattern, BitMatrix &m) {
     do {
         changed = false;
 
-        for (int i = 0; i < pattern.nodesList.size(); i++) {
-            for (int j = 0; j < nodesList.size(); j++) {
+        // iterate over all 1 bits of the MapMatrix
+        for (int i = 0; i < pattern.adjacencyMatrix.size(); i++) {
+            for (int j = 0; j < adjacencyMatrix.size(); j++) {
                 // we don ’t need to check those
                 if (!m[i].test(j)) continue;
 
@@ -174,17 +78,6 @@ void Digraph::prune(const Digraph &pattern, BitMatrix &m) {
 
 }
 
-bool Digraph::isMapMatrixIsomorphic(const Digraph &other, const BitMatrix &m) const {
-    // TODO: sprawdzanie izomorfizmu na macierzach
-
-    Subgraph sub;
-
-    for (int i = 0; i < m.size(); i++)
-        sub.emplace_back(m[i].findFirstOne() - 1);
-
-    return isPermutationIsomorphism(other, sub);
-}
-
 BitVector Digraph::matrixToVector(const BitMatrix &m) const {
     BitVector result(m[0].size());
 
@@ -197,15 +90,11 @@ BitVector Digraph::matrixToVector(const BitMatrix &m) const {
 
 bool Digraph::setDisjunction(const BitVector &s)
 {
-    for (int i = 0; i < s.size(); i++) {
-        if (s.test(i) && nodesList[i].isUsed)
-            return false;
-    }
+    // some nodes are already used
+    if (s.bitAND(this->usedNodes))
+        return false;
 
-    for (int i = 0; i < s.size(); i++) {
-        if (s.test(i))
-            nodesList[i].isUsed = true;
-    }
+    this->usedNodes.bitOR(s);
 
     return true;
 }
@@ -213,8 +102,8 @@ bool Digraph::setDisjunction(const BitVector &s)
 // returns false if there is at least one row with no 1
 bool Digraph::validateMapMatrix(const BitMatrix &m) const
 {
-    for (const auto &it : m) {
-        if (!it.any())
+    for (int i = 0; i < m.size(); i++) {
+        if (!m[i].any())
             return false;
     }
 
@@ -223,10 +112,11 @@ bool Digraph::validateMapMatrix(const BitMatrix &m) const
 
 
 void Digraph::recursiveSearch(int currentRow, BitVector &usedColumns, const Digraph &pattern,
-                              BitMatrix m, bool isDisjunctive, std::vector<BitVector> &result)
+                              bool isOptimized, BitMatrix m, bool isDisjunctive, std::vector<BitVector> &result)
 {
+    // we finished recursing
     if (currentRow == m.size()) {
-        if (isMapMatrixIsomorphic(pattern, m)) {
+        if (isPermutationIsomorphism(pattern, m)) {
 
             BitVector isomorphism = matrixToVector(m);
             if (!isDisjunctive || setDisjunction(isomorphism))
@@ -236,17 +126,20 @@ void Digraph::recursiveSearch(int currentRow, BitVector &usedColumns, const Digr
         return;
     }
 
-    prune(pattern, m);
+    if (isOptimized) {
+        prune(pattern, m);
 
-    if (!validateMapMatrix(m))
-        return;
+        if (!validateMapMatrix(m))
+            return;
+    }
 
     for (int i = 0; i < usedColumns.size(); i++) {
         if (usedColumns.test(i))
             continue;
+        // set just one bit in the row
         m[currentRow].setUnique(i);
         usedColumns.set(i);
-        recursiveSearch(currentRow + 1, usedColumns, pattern, m, isDisjunctive, result);
+        recursiveSearch(currentRow + 1, usedColumns, pattern, isOptimized, m, isDisjunctive, result);
         usedColumns.reset(i);
     }
 }
@@ -265,19 +158,18 @@ Subgraph Digraph::bitVectorToSubraph(const BitVector &v) {
     return result;
 }
 
-std::vector<Subgraph> Digraph::searchPatternUllman(const Digraph &pattern, bool isDisjunctive)
+std::vector<Subgraph> Digraph::searchPattern(const Digraph &pattern, bool isDisjunctive, bool isOptimized)
 {
     std::vector<BitVector> result;
     std::vector<Subgraph> ret;
-    BitMatrix mapMatrix;
-    BitVector usedColumns(nodesList.size());
+    BitMatrix mapMatrix(pattern.adjacencyMatrix.size(), adjacencyMatrix.size());
+    BitVector usedColumns(adjacencyMatrix.size());
 
-    for (int i = 0; i < pattern.nodesList.size(); i++)
-        mapMatrix.emplace_back(BitVector(nodesList.size()));
 
-    degreesCheck(pattern, mapMatrix);
+    if (isOptimized)
+        degreesCheck(pattern, mapMatrix);
 
-    recursiveSearch(0, usedColumns, pattern, mapMatrix, isDisjunctive, result);
+    recursiveSearch(0, usedColumns, pattern, isOptimized, mapMatrix, isDisjunctive, result);
 
     for (int i = 0; i < result.size(); i++) {
         bool equals = false;
